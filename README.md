@@ -3,7 +3,7 @@ Attention-Based Convolutional Neural Network for Modeling Sentence Pairs
 
 Under organizing code, sorry
 
-I have added variety networks to abcnn
+I have added resnet, googlenet to abcnn
 
 In practice, Inception network helps deeper network(more than 10) to learn.
 
