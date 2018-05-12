@@ -1,0 +1,30 @@
+title = 'TOML Example'
+
+[general]
+usecudnn = true
+usecudnnbenchmark = true
+gpuid = 1
+loadpretrainedmodel = true
+pretrainedmodelpath = 'trainedmodel.pt'
+savemodel = true
+
+[input]
+batchsize = 32
+numworkers = 18
+shuffle = true
+
+[model]
+embeddeddimension = 200
+strlenmax = 15
+filterwidth = 2
+filterchannel = 130
+layersize = 2
+inception = true
+matchscore = 'cosine'
+
+[training]
+epochs = 15
+startepoch = 0
+dataset = 'sample_data/'
+learningrate = 0.01
+weightdecay = 0.0001

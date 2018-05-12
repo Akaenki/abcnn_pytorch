@@ -1,49 +1,34 @@
 import numpy as np
 import torch
-from torch import nn, optim
-from torch.autograd import Variable
 from torch.nn import functional as F
 
 class Abcnn(nn.Module):
 
-    def __init__(self, batch_size, emb_dim, sentence_length, filter_w, filter_c=100, layer_size=2, match='cosine', inception=True, resnet=False):
+    def __init__(self, emb_dim, sentence_length, filter_width, filter_channel=100, layer_size=2, match='cosine', inception=True):
         super(Abcnn, self).__init__()
         self.layer_size = layer_size
-        if resnet:
-            filter_c = emb_dim
             
         if match == 'cosine':
             self.match = cosine_similarity
         else:
             self.match = manhattan_distance
+
         self.ap_input = ApLayer(sentence_length, emb_dim)
         self.attention_bn = nn.ModuleList()
         self.abcnn_layers = nn.ModuleList()
         self.conv = nn.ModuleList()
         self.ap = nn.ModuleList()
-        self.wp = WpLayer(sentence_length, filter_w)
+        self.wp = WpLayer(sentence_length, filter_width)
         self.fc = nn.Linear(layer_size+1, 1)
 
         for i in range(layer_size):
             self.attention_bn.append(nn.BatchNorm2d(2))
             self.abcnn_layers.append(Abcnn1(sentence_length, emb_dim if i == 0 else filter_c))
-            self.conv.append(ConvLayer(sentence_length, filter_w, emb_dim if i == 0 else filter_c, filter_c, inception, resnet))
-            self.ap.append(ApLayer(sentence_length if resnet else sentence_length + filter_w - 1, filter_c))
+            self.conv.append(ConvLayer(sentence_length, filter_width, emb_dim if i == 0 else filter_channel, filter_channel, inception))
+            self.ap.append(ApLayer(sentence_length + filter_width - 1, filter_channel))
         
-    def forward(self, x):
+    def forward(self, x1, x2):
         sim = []
-        x = np.array(x)
-        x1 = x[:, 0, :, :]
-        x2 = x[:, 1, :, :]
-        
-        x1 = Variable(torch.from_numpy(x1).float())
-        x2 = Variable(torch.from_numpy(x2).float())
-        
-        try:
-            x1 = x1.cuda()
-            x2 = x2.cuda()
-        except:
-            pass
         
         sim.append(self.match(self.ap_input(x1), self.ap_input(x2)))
         for i in range(self.layer_size):
@@ -67,14 +52,13 @@ class Abcnn(nn.Module):
         output = self.fc(sim_fc)
         return output
 
-
 class InceptionModule(nn.Module):
     
-    def __init__(self, strmaxlen, filter_width, filter_height, filter_channel, version='wide'):
+    def __init__(self, strmaxlen, filter_width, filter_height, filter_channel):
         super(InceptionModule,self).__init__()
-        self.conv_1 = convolution(filter_width, filter_height, int(filter_channel/3) + filter_channel - 3*int(filter_channel/3), filter_width-1 if version=='wide' else int((filter_width-1)/2))
-        self.conv_2 = convolution(filter_width+4, filter_height, int(filter_channel/3), filter_width+1 if version=='wide' else int((filter_width+3)/2))
-        self.conv_3 = convolution(strmaxlen, filter_height, int(filter_channel/3), int((strmaxlen+filter_width-2)/2) if version=='wide' else int((strmaxlen-1)/2))
+        self.conv_1 = convolution(filter_width, filter_height, int(filter_channel/3) + filter_channel - 3*int(filter_channel/3), filter_width-1)
+        self.conv_2 = convolution(filter_width+4, filter_height, int(filter_channel/3), filter_width+1)
+        self.conv_3 = convolution(strmaxlen, filter_height, int(filter_channel/3), int((strmaxlen+filter_width-2)/2))
 
     def forward(self, x):
         out_1 = self.conv_1(x)
@@ -101,24 +85,14 @@ class Abcnn1(nn.Module):
 
 class ConvLayer(nn.Module):
 
-    def __init__(self, strmaxlen, filter_width, filter_height, filter_channel, inception=True, resnet=False):
+    def __init__(self, strmaxlen, filter_width, filter_height, filter_channel, inception=True):
         super(ConvLayer, self).__init__()
-        self.resnet = resnet
         if inception:
-            self.model = InceptionModule(strmaxlen, filter_width, filter_height, filter_channel, version='same' if resnet else 'wide')
+            self.model = InceptionModule(strmaxlen, filter_width, filter_height, filter_channel)
         else:
-            self.model = convolution(filter_width, filter_height, filter_channel, int((filter_width-1)/2) if resnet else filter_width-1)
-
-        # if resnet:
-        #     self.down_sample = convolution(1, 1, 1, 0)
+            self.model = convolution(filter_width, filter_height, filter_channel, filter_width-1)
 
     def forward(self, x):
-        # if self.resnet:
-        #     output = self.model(x)
-        #     output = output.permute(0, 3, 2, 1)
-        #     x = self.down_sample(x)
-        #     output = x + output
-        # else:
         output = self.model(x)
         output = output.permute(0, 3, 2, 1)
         return output
