@@ -9,9 +9,9 @@ class Abcnn(nn.Module):
         self.layer_size = layer_size
             
         if match == 'cosine':
-            self.match = cosine_similarity
+            self.distance = cosine_similarity
         else:
-            self.match = manhattan_distance
+            self.distance = manhattan_distance
 
         self.ap_input = ApLayer(sentence_length, emb_dim)
         self.attention_bn = nn.ModuleList()
@@ -30,7 +30,7 @@ class Abcnn(nn.Module):
     def forward(self, x1, x2):
         sim = []
         
-        sim.append(self.match(self.ap_input(x1), self.ap_input(x2)))
+        sim.append(self.distance(self.ap_input(x1), self.ap_input(x2)))
         for i in range(self.layer_size):
             if len(list(x1.size())) == 3:
                 x1 = x1.unsqueeze(1)
@@ -42,7 +42,7 @@ class Abcnn(nn.Module):
             x2 = self.attention_bn[i](x2)
             x1 = self.conv[i](x1)
             x2 = self.conv[i](x2)
-            sim.append(self.match(self.ap[i](x1), self.ap[i](x2)))
+            sim.append(self.distance(self.ap[i](x1), self.ap[i](x2)))
             a_conv = attention_matrix(x1, x2)
             x1_a_conv = a_conv.sum(dim=1)
             x2_a_conv = a_conv.sum(dim=2)
@@ -98,17 +98,32 @@ class ConvLayer(nn.Module):
         return output
 
 def cosine_similarity(x1, x2):
-    '''
-    x = (bs, h)
-    after cos = (bs,)
-    output = (bs, 1)
+    '''compute cosine similarity between x1 and x2
+
+    Parameters
+    ----------
+    x1, x2 : 2-D torch Tensor
+        size (batch_size, 1)
+
+    Returns
+    -------
+    distance : 2-D torch Tensor
+        similarity results of size (batch_size, 1)
     '''
     return F.cosine_similarity(x1, x2).unsqueeze(1)
 
 def manhattan_distance(x1, x2):
-    '''
-    x = (bs, h)
-    output = (bs, 1)
+    '''compute manhattan distance between x1 and x2
+
+    Parameters
+    ----------
+    x1, x2 : 2-D torch Tensor
+        size (batch_size, 1)
+
+    Returns
+    -------
+    distance : 2-D torch Tensor
+        similarity results of size (batch_size, 1)
     '''
     return torch.div(torch.norm((x1 - x2), 1, 1, keepdim=True), x1.size()[1])
 
@@ -121,23 +136,27 @@ def convolution(filter_width, filter_height, filter_channel, padding):
     )
     return model
     
+def attention_matrix(x1, x2, eps=1e-6):
+    '''make attention matrix using match score function
+    
+    1/(1 + |x · y|)
+    |·| is euclidean distance
 
-def attention_matrix(x1, x2):
-    '''
-    make attention matrix using match score
-    x = (bs, 1(channel), w, h)
-    permuted x = (bs, w, 1, h)
-    output = (bs, w(for x2), w(for x1))
+    Parameters
+    ----------
+    x1, x2 : 4-D torch Tensor
+        size (batch_size, 1, w, h)
+    
+    Returns
+    -------
+    output : 3-D torch Tensor
+        match score results of size (batch_size, w(for x2), w(for x1))
     '''
     
-    eps = Variable(torch.Tensor([1e-6]))
-    one = Variable(torch.Tensor([1]))
-    try:
-        eps = eps.cuda()
-        one = one.cuda()
-    except:
-        pass
-    euclidean = (((x1 - x2.permute(0, 2, 1, 3)) ** 2).sum(dim=3) + eps).sqrt()
+    eps = torch.Tensor(eps, dtype=torch.float32)
+    one = torch.Tensor(1, dtype=torch.float32)
+    
+    euclidean = ((torch.pow(x1 - x2.permute(0, 2, 1, 3), 2).sum(dim=3) + eps).sqrt()
     return (euclidean + one).reciprocal()
 
 class ApLayer(nn.Module):

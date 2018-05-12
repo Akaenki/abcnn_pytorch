@@ -8,6 +8,7 @@ from torch.autograd import Variable
 from abcnn import Abcnn, weights_init
 
 def train(options):
+    device = torch.device("cuda" if options['general']['usecudnn'] else "cpu")
 
     #batch_size, emb_dim, sentence_length, filter_w, filter_c=100, layer_size=2
     model = Abcnn(options['model']['embeddeddimension'],
@@ -15,15 +16,14 @@ def train(options):
                 options['model']['filterwidth'],
                 options['model']['filterchannel'],
                 options['model']['layersize'],
-                match=options['model']['matchscore'],
+                match=options['model']['distance'],
                 inception=options['model']['inception'])
     model.apply(weights_init)
 
     if(options['general']['loadpretrainedmodel']):
         model.load_state_dict(torch.load(options['general']['pretrainedmodelpath']))
 
-    if options['general']['usecudnn']:
-        model = model.cuda(options['general']['gpuid'])
+    model = model.to(device)
 
     optimizer = optim.Adam(model.parameters(),
                     lr=options['training']['learningrate'],
@@ -46,28 +46,24 @@ def train(options):
             data = np.array(data)
             x1 = data[:, 0, :, :]
             x2 = data[:, 1, :, :]
-            x1 = Variable(torch.from_numpy(x1).float())
-            x2 = Variable(torch.from_numpy(x2).float())
+            x1 = torch.from_numpy(x1).float()
+            x2 = torch.from_numpy(x2).float()
             
-            if options['general']['usecudnn']:
-                x1 = x1.cuda(options['general']['gpuid'])
-                x2 = x2.cuda(options['general']['gpuid'])
-                
-            predictions = model(x1, x2)
-            label_vars = Variable(torch.from_numpy(labels))
+            x1 = x1.to(device)
+            x2 = x2.to(device)
+            
+            label_vars = torch.from_numpy(labels)
+            label_vars = label_vars.to(device)
 
-            if options['general']['usecudnn']:
-                label_vars = label_vars.cuda(options['general']['gpuid'])
+            predictions = model(x1, x2)
             
             loss = criterion(predictions.float(), label_vars)
-            
-            if options['general']['usecudnn']:
-                loss = loss.cuda(options['general']['gpuid'])
+            loss = loss.to(device)
                 
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            avg_loss += loss.data[0]
+            avg_loss += loss.item()
 
         print('epoch:', epoch, ' train_loss:', float(avg_loss/total_batch))
         if options['general']['savemodel']:
