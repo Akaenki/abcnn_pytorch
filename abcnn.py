@@ -1,11 +1,12 @@
 import numpy as np
 import torch
+from torch import nn
 from torch.nn import functional as F
 
 class Abcnn3(nn.Module):
 
     def __init__(self, emb_dim, sentence_length, filter_width, filter_channel=100, layer_size=2, match='cosine', inception=True):
-        super(Abcnn, self).__init__()
+        super(Abcnn3, self).__init__()
         self.layer_size = layer_size
             
         if match == 'cosine':
@@ -46,7 +47,7 @@ class Abcnn1Portion(nn.Module):
     '''
 
     def __init__(self, in_dim, out_dim):
-        super(Abcnn1, self).__init__()
+        super(Abcnn1Portion, self).__init__()
         self.batchNorm = nn.BatchNorm2d(2)
         self.attention_feature_layer = nn.Linear(in_dim, out_dim)
 
@@ -90,7 +91,7 @@ class Abcnn2Portion(nn.Module):
     '''
 
     def __init__(self, sentence_length, filter_width):
-        super(Abcnn2.self).__init__()
+        super(Abcnn2Portion, self).__init__()
         self.wp = WpLayer(sentence_length, filter_width)
 
     def forward(self, x1, x2):
@@ -206,10 +207,9 @@ def attention_matrix(x1, x2, eps=1e-6):
         match score result of size (batch_size, w(x2), w(x1))
     '''
     
-    eps = torch.Tensor(eps, dtype=torch.float32)
-    one = torch.Tensor(1, dtype=torch.float32)
-    
-    euclidean = ((torch.pow(x1 - x2.permute(0, 2, 1, 3), 2).sum(dim=3) + eps).sqrt()
+    eps = torch.tensor(eps)
+    one = torch.tensor(1.)
+    euclidean = (torch.pow(x1 - x2.permute(0, 2, 1, 3), 2).sum(dim=3) + eps).sqrt()
     return (euclidean + one).reciprocal()
 
 class ApLayer(nn.Module):
@@ -248,10 +248,10 @@ class WpLayer(nn.Module):
 def weights_init(m):
     classname = m.__class__.__name__
     if classname.find('Conv') != -1 and classname.find('Layer') == -1:
-        nn.init.xavier_uniform(m.weight)
+        nn.init.xavier_uniform_(m.weight)
     elif classname.find('Linear') != -1:
-        nn.init.xavier_uniform(m.weight)
-        nn.init.constant(m.bias, 0.1)
+        nn.init.xavier_uniform_(m.weight)
+        nn.init.constant_(m.bias, 0.1)
     elif classname.find('BatchNorm') != -1:
         m.weight.data.normal_(1.0, 0.02)
         m.bias.data.fill_(0)

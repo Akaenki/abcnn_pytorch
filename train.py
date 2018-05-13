@@ -4,13 +4,13 @@ from torch import nn, optim
 from dataset import KinQueryDataset, preprocess
 from torch.utils.data import DataLoader
 
-from abcnn import Abcnn, weights_init
+from abcnn import Abcnn3, weights_init
 
 def train(options):
     device = torch.device("cuda" if options['general']['usecudnn'] else "cpu")
 
     #batch_size, emb_dim, sentence_length, filter_w, filter_c=100, layer_size=2
-    model = Abcnn(options['model']['embeddeddimension'],
+    model = Abcnn3(options['model']['embeddeddimension'],
                 options['model']['strlenmax'],
                 options['model']['filterwidth'],
                 options['model']['filterchannel'],
@@ -37,26 +37,21 @@ def train(options):
     total_batch = len(train_loader)
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.5)
 
-    for epoch in rrange(options['training']['startepoch'], options['training']['epochs']):
+    for epoch in range(options['training']['startepoch'], options['training']['epochs']):
         avg_loss = 0.0
         scheduler.step()
         
         for data, labels in train_loader:
-            data = np.array(data)
-            x1 = data[:, 0, :, :]
-            x2 = data[:, 1, :, :]
-            x1 = torch.from_numpy(x1).float()
-            x2 = torch.from_numpy(x2).float()
+            x1 = data[:, 0, :, :].unsqueeze(1)
+            x2 = data[:, 1, :, :].unsqueeze(1)
             
             x1 = x1.to(device)
             x2 = x2.to(device)
             
-            label_vars = torch.from_numpy(labels)
-            label_vars = label_vars.to(device)
-
+            labels = labels.to(device)
             predictions = model(x1, x2)
             
-            loss = criterion(predictions.float(), label_vars)
+            loss = criterion(predictions.float(), labels)
             loss = loss.to(device)
                 
             optimizer.zero_grad()

@@ -1,12 +1,12 @@
 title = 'TOML Example'
 
 [general]
-usecudnn = true
-usecudnnbenchmark = true
+usecudnn = false
+usecudnnbenchmark = false
 gpuid = 1
-loadpretrainedmodel = true
+loadpretrainedmodel = false
 pretrainedmodelpath = 'trainedmodel.pt'
-savemodel = true
+savemodel = false
 
 [input]
 batchsize = 32
@@ -16,7 +16,7 @@ shuffle = true
 [model]
 embeddeddimension = 200
 strlenmax = 15
-filterwidth = 2
+filterwidth = 1
 filterchannel = 130
 layersize = 2
 inception = true
