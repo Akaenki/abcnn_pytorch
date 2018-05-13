@@ -1,6 +1,7 @@
 from __future__ import print_function
 import torch
 import toml
+from train import train
 
 print('Loading options...')
 with open('options.toml', 'r') as optionsFile:

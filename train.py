@@ -3,7 +3,6 @@ import torch
 from torch import nn, optim
 from dataset import KinQueryDataset, preprocess
 from torch.utils.data import DataLoader
-from torch.autograd import Variable
 
 from abcnn import Abcnn, weights_init
 
