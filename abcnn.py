@@ -34,10 +34,9 @@ class Abcnn3(nn.Module):
         self.abcnn1 = nn.ModuleList()
         self.abcnn2 = Abcnn2Portion(sentence_length, filter_width)
         self.conv = nn.ModuleList()
-        self.ap = nn.ModuleList()
+        self.ap = nn.ModuleList([ApLayer(sentence_length, emb_dim)])
         self.fc = nn.Linear(layer_size+1, 1)
 
-        self.ap.append(ApLayer(sentence_length, emb_dim))
 
         for i in range(layer_size):
             self.abcnn1.append(Abcnn1Portion(sentence_length, emb_dim if i == 0 else filter_channel))
@@ -97,9 +96,9 @@ class Abcnn1(nn.Module):
         the number of (abcnn1)
     distance : function
         cosine similarity or manhattan
-    abcnn1 : list of abcnn1
-    abcnn2 : abcnn2
+    abcnn : list of abcnn1
     conv : list of convolution layer
+    wp : w-ap pooling layer
     ap : list of pooling layer
     fc : last linear layer(in paper use logistic regression)
     '''
@@ -115,10 +114,9 @@ class Abcnn1(nn.Module):
 
         self.abcnn = nn.ModuleList()
         self.conv = nn.ModuleList()
-        self.ap = nn.ModuleList()
+        self.ap = nn.ModuleList([ApLayer(sentence_length, emb_dim)])
         self.wp = WpLayer(sentence_length, filter_width, False)
         self.fc = nn.Linear(layer_size+1, 1)
-        self.ap.append(ApLayer(sentence_length, emb_dim))
 
         for i in range(layer_size):
             self.abcnn.append(Abcnn1Portion(sentence_length, emb_dim if i == 0 else filter_channel))
@@ -178,8 +176,7 @@ class Abcnn2(nn.Module):
         the number of (abcnn2)
     distance : function
         cosine similarity or manhattan
-    abcnn1 : list of abcnn1
-    abcnn2 : abcnn2
+    abcnn : abcnn2
     conv : list of convolution layer
     ap : list of pooling layer
     fc : last linear layer(in paper use logistic regression)
@@ -188,7 +185,7 @@ class Abcnn2(nn.Module):
     def __init__(self, emb_dim, sentence_length, filter_width, filter_channel=100, layer_size=2, match='cosine', inception=True):
         super(Abcnn2, self).__init__()
         self.layer_size = layer_size
-
+    
         if match == 'cosine':
             self.distance = cosine_similarity
         else:
@@ -196,9 +193,8 @@ class Abcnn2(nn.Module):
 
         self.abcnn = Abcnn2Portion(sentence_length, filter_width)
         self.conv = nn.ModuleList()
-        self.ap = nn.ModuleList()
+        self.ap = nn.ModuleList([ApLayer(sentence_length, emb_dim)])
         self.fc = nn.Linear(layer_size+1, 1)
-        self.ap.append(ApLayer(sentence_length, emb_dim))
 
         for i in range(layer_size):
             self.conv.append(ConvLayer(True, sentence_length, filter_width, emb_dim if i == 0 else filter_channel, filter_channel, inception))
