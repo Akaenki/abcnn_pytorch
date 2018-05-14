@@ -17,7 +17,7 @@ class Abcnn3(nn.Module):
     distance : function
         cosine similarity or manhattan
     abcnn1 : list of abcnn1
-    abcnn2 : abcnn2
+    abcnn2 : list of abcnn2
     conv : list of convolution layer
     ap : list of pooling layer
     fc : last linear layer(in paper use logistic regression)
@@ -32,7 +32,7 @@ class Abcnn3(nn.Module):
             self.distance = manhattan_distance
 
         self.abcnn1 = nn.ModuleList()
-        self.abcnn2 = Abcnn2Portion(sentence_length, filter_width)
+        self.abcnn2 = nn.ModuleList()
         self.conv = nn.ModuleList()
         self.ap = nn.ModuleList([ApLayer(sentence_length, emb_dim)])
         self.fc = nn.Linear(layer_size+1, 1)
@@ -40,6 +40,7 @@ class Abcnn3(nn.Module):
 
         for i in range(layer_size):
             self.abcnn1.append(Abcnn1Portion(sentence_length, emb_dim if i == 0 else filter_channel))
+            self.abcnn2.append(Abcnn2Portion(sentence_length, filter_width))
             self.conv.append(ConvLayer(False, sentence_length, filter_width, emb_dim if i == 0 else filter_channel, filter_channel, inception))
             self.ap.append(ApLayer(sentence_length + filter_width - 1, filter_channel))
         
@@ -77,7 +78,7 @@ class Abcnn3(nn.Module):
             x1 = self.conv[i](x1)
             x2 = self.conv[i](x2)
             sim.append(self.distance(self.ap[i+1](x1), self.ap[i+1](x2)))
-            x1, x2 = self.abcnn2(x1, x2)
+            x1, x2 = self.abcnn2[i](x1, x2)
             
         sim_fc = torch.cat(sim, dim=1)
         output = self.fc(sim_fc)
@@ -98,7 +99,7 @@ class Abcnn1(nn.Module):
         cosine similarity or manhattan
     abcnn : list of abcnn1
     conv : list of convolution layer
-    wp : w-ap pooling layer
+    wp : list of w-ap pooling layer
     ap : list of pooling layer
     fc : last linear layer(in paper use logistic regression)
     '''
@@ -115,13 +116,14 @@ class Abcnn1(nn.Module):
         self.abcnn = nn.ModuleList()
         self.conv = nn.ModuleList()
         self.ap = nn.ModuleList([ApLayer(sentence_length, emb_dim)])
-        self.wp = WpLayer(sentence_length, filter_width, False)
+        self.wp = nn.ModuleList()
         self.fc = nn.Linear(layer_size+1, 1)
 
         for i in range(layer_size):
             self.abcnn.append(Abcnn1Portion(sentence_length, emb_dim if i == 0 else filter_channel))
             self.conv.append(ConvLayer(False, sentence_length, filter_width, emb_dim if i == 0 else filter_channel, filter_channel, inception))
             self.ap.append(ApLayer(sentence_length + filter_width - 1, filter_channel))
+            self.wp.append(WpLayer(sentence_length, filter_width, False))
 
     def forward(self, x1, x2):
         '''
@@ -157,8 +159,8 @@ class Abcnn1(nn.Module):
             x1 = self.conv[i](x1)
             x2 = self.conv[i](x2)
             sim.append(self.distance(self.ap[i+1](x1), self.ap[i+1](x2)))
-            x1 = self.wp(x1)
-            x2 = self.wp(x2)
+            x1 = self.wp[i](x1)
+            x2 = self.wp[i](x2)
             
         sim_fc = torch.cat(sim, dim=1)
         output = self.fc(sim_fc)
@@ -176,7 +178,7 @@ class Abcnn2(nn.Module):
         the number of (abcnn2)
     distance : function
         cosine similarity or manhattan
-    abcnn : abcnn2
+    abcnn : list of abcnn2
     conv : list of convolution layer
     ap : list of pooling layer
     fc : last linear layer(in paper use logistic regression)
@@ -191,12 +193,13 @@ class Abcnn2(nn.Module):
         else:
             self.distance = manhattan_distance
 
-        self.abcnn = Abcnn2Portion(sentence_length, filter_width)
+        self.abcnn = nn.ModuleList()
         self.conv = nn.ModuleList()
         self.ap = nn.ModuleList([ApLayer(sentence_length, emb_dim)])
         self.fc = nn.Linear(layer_size+1, 1)
 
         for i in range(layer_size):
+            self.abcnn.append(Abcnn2Portion(sentence_length, filter_width))
             self.conv.append(ConvLayer(True, sentence_length, filter_width, emb_dim if i == 0 else filter_channel, filter_channel, inception))
             self.ap.append(ApLayer(sentence_length + filter_width - 1, filter_channel))
 
@@ -232,7 +235,7 @@ class Abcnn2(nn.Module):
             x1 = self.conv[i](x1)
             x2 = self.conv[i](x2)
             sim.append(self.distance(self.ap[i+1](x1), self.ap[i+1](x2)))
-            x1, x2 = self.abcnn(x1, x2)
+            x1, x2 = self.abcnn[i](x1, x2)
             
         sim_fc = torch.cat(sim, dim=1)
         output = self.fc(sim_fc)
