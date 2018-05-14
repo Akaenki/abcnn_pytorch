@@ -7,6 +7,18 @@ Attention-Based Convolutional Neural Network for Modeling Sentence Pairs
  - Run `pip3 install -r requirements.txt` to install project dependencies.
  - to use, run  `python3 main.py`.
 
+## File descriptions
+```bash
+├── README.md
+├── sample_data/ # empty directory because of license
+├── abcnn.py # model
+├── dataset.py # data load
+├── main.py
+├── options.toml # options
+├── requirements.txt
+├── train.py # training function
+```
+
 ## Dependencies
  - JPype1==0.6.2
  - JPype1-py3==0.5.5.2
@@ -19,3 +31,5 @@ Attention-Based Convolutional Neural Network for Modeling Sentence Pairs
 
 jype1, konlpy, mecab are for korean dataset
 you don't have to use dataset.py. it's for korean dataset
+
+## Note
