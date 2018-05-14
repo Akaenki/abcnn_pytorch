@@ -4,7 +4,24 @@ from torch import nn
 from torch.nn import functional as F
 
 class Abcnn3(nn.Module):
+    '''
+    ABCNN3
+    1. ABCNN1
+    2. wide convolution
+    3. ABCNN2
 
+    Attributes
+    ----------
+    layer_size : int
+        the number of (abcnn1 + abcnn2)
+    distance : function
+        cosine similarity or manhattan
+    abcnn1 : list of abcnn1
+    abcnn2 : abcnn2
+    conv : list of convolution layer
+    ap : list of pooling layer
+    fc : last linear layer(in paper use logistic regression)
+    '''
     def __init__(self, emb_dim, sentence_length, filter_width, filter_channel=100, layer_size=2, match='cosine', inception=True):
         super(Abcnn3, self).__init__()
         self.layer_size = layer_size
@@ -24,10 +41,35 @@ class Abcnn3(nn.Module):
 
         for i in range(layer_size):
             self.abcnn1.append(Abcnn1Portion(sentence_length, emb_dim if i == 0 else filter_channel))
-            self.conv.append(ConvLayer(sentence_length, filter_width, emb_dim if i == 0 else filter_channel, filter_channel, inception))
+            self.conv.append(ConvLayer(False, sentence_length, filter_width, emb_dim if i == 0 else filter_channel, filter_channel, inception))
             self.ap.append(ApLayer(sentence_length + filter_width - 1, filter_channel))
         
     def forward(self, x1, x2):
+        '''
+        1. stack sentence vector similarity
+
+        2. for layer_size
+            abcnn1
+            convolution
+            stack sentence representation vector similarity
+            abcnn2
+        
+        3. concatenate similarity list
+            size (batch_size, layer_size + 1)
+
+        4. Linear layer
+            size (batch_size, 1)
+
+        Parameters
+        ----------
+        x1, x2 : 4-D torch Tensor
+            size (batch_size, 1, width, emb_dim)
+
+        Returns
+        -------
+        output : 2-D torch Tensor
+            size (batch_size, 1)
+        '''
         sim = []
         sim.append(self.distance(self.ap[0](x1), self.ap[0](x2)))
 
@@ -37,6 +79,164 @@ class Abcnn3(nn.Module):
             x2 = self.conv[i](x2)
             sim.append(self.distance(self.ap[i+1](x1), self.ap[i+1](x2)))
             x1, x2 = self.abcnn2(x1, x2)
+            
+        sim_fc = torch.cat(sim, dim=1)
+        output = self.fc(sim_fc)
+        return output
+
+class Abcnn1(nn.Module):
+    '''
+    ABCNN1
+    1. ABCNN1
+    2. wide convolution
+    3. W-ap
+
+    Attributes
+    ----------
+    layer_size : int
+        the number of (abcnn1)
+    distance : function
+        cosine similarity or manhattan
+    abcnn1 : list of abcnn1
+    abcnn2 : abcnn2
+    conv : list of convolution layer
+    ap : list of pooling layer
+    fc : last linear layer(in paper use logistic regression)
+    '''
+
+    def __init__(self, emb_dim, sentence_length, filter_width, filter_channel=100, layer_size=2, match='cosine', inception=True):
+        super(Abcnn1, self).__init__()
+        self.layer_size = layer_size
+
+        if match == 'cosine':
+            self.distance = cosine_similarity
+        else:
+            self.distance = manhattan_distance
+
+        self.abcnn = nn.ModuleList()
+        self.conv = nn.ModuleList()
+        self.ap = nn.ModuleList()
+        self.wp = WpLayer(sentence_length, filter_width, False)
+        self.fc = nn.Linear(layer_size+1, 1)
+        self.ap.append(ApLayer(sentence_length, emb_dim))
+
+        for i in range(layer_size):
+            self.abcnn.append(Abcnn1Portion(sentence_length, emb_dim if i == 0 else filter_channel))
+            self.conv.append(ConvLayer(False, sentence_length, filter_width, emb_dim if i == 0 else filter_channel, filter_channel, inception))
+            self.ap.append(ApLayer(sentence_length + filter_width - 1, filter_channel))
+
+    def forward(self, x1, x2):
+        '''
+        1. stack sentence vector similarity
+
+        2. for layer_size
+            abcnn1
+            convolution
+            stack sentence vector similarity
+            W-ap for next loop x1, x2
+        
+        3. concatenate similarity list
+            size (batch_size, layer_size + 1)
+
+        4. Linear layer
+            size (batch_size, 1)
+
+        Parameters
+        ----------
+        x1, x2 : 4-D torch Tensor
+            size (batch_size, 1, width, emb_dim)
+
+        Returns
+        -------
+        output : 2-D torch Tensor
+            size (batch_size, 1)
+        '''
+        sim = []
+        sim.append(self.distance(self.ap[0](x1), self.ap[0](x2)))
+
+        for i in range(self.layer_size):
+            x1, x2 = self.abcnn[i](x1, x2)
+            x1 = self.conv[i](x1)
+            x2 = self.conv[i](x2)
+            sim.append(self.distance(self.ap[i+1](x1), self.ap[i+1](x2)))
+            x1 = self.wp(x1)
+            x2 = self.wp(x2)
+            
+        sim_fc = torch.cat(sim, dim=1)
+        output = self.fc(sim_fc)
+        return output
+
+class Abcnn2(nn.Module):
+    '''
+    ABCNN2
+    1. wide convolution
+    2. ABCNN2
+
+    Attributes
+    ----------
+    layer_size : int
+        the number of (abcnn2)
+    distance : function
+        cosine similarity or manhattan
+    abcnn1 : list of abcnn1
+    abcnn2 : abcnn2
+    conv : list of convolution layer
+    ap : list of pooling layer
+    fc : last linear layer(in paper use logistic regression)
+    '''
+
+    def __init__(self, emb_dim, sentence_length, filter_width, filter_channel=100, layer_size=2, match='cosine', inception=True):
+        super(Abcnn2, self).__init__()
+        self.layer_size = layer_size
+
+        if match == 'cosine':
+            self.distance = cosine_similarity
+        else:
+            self.distance = manhattan_distance
+
+        self.abcnn = Abcnn2Portion(sentence_length, filter_width)
+        self.conv = nn.ModuleList()
+        self.ap = nn.ModuleList()
+        self.fc = nn.Linear(layer_size+1, 1)
+        self.ap.append(ApLayer(sentence_length, emb_dim))
+
+        for i in range(layer_size):
+            self.conv.append(ConvLayer(True, sentence_length, filter_width, emb_dim if i == 0 else filter_channel, filter_channel, inception))
+            self.ap.append(ApLayer(sentence_length + filter_width - 1, filter_channel))
+
+    def forward(self, x1, x2):
+        '''
+        1. stack sentence vector similarity
+
+        2. for layer_size
+            convolution
+            stack sentence vector similarity
+            abcnn2
+        
+        3. concatenate similarity list
+            size (batch_size, layer_size + 1)
+
+        4. Linear layer
+            size (batch_size, 1)
+
+        Parameters
+        ----------
+        x1, x2 : 4-D torch Tensor
+            size (batch_size, 1, width, emb_dim)
+
+        Returns
+        -------
+        output : 2-D torch Tensor
+            size (batch_size, 1)
+        '''
+        sim = []
+        sim.append(self.distance(self.ap[0](x1), self.ap[0](x2)))
+
+        for i in range(self.layer_size):
+            x1 = self.conv[i](x1)
+            x2 = self.conv[i](x2)
+            sim.append(self.distance(self.ap[i+1](x1), self.ap[i+1](x2)))
+            x1, x2 = self.abcnn(x1, x2)
             
         sim_fc = torch.cat(sim, dim=1)
         output = self.fc(sim_fc)
@@ -54,22 +254,22 @@ class Abcnn1Portion(nn.Module):
     def forward(self, x1, x2):
         '''
         1. compute attention matrix
-            attention_m : size of (batch_size, w, w)
+            attention_m : size (batch_size, sentence_length, sentence_length)
         2. generate attention feature map(weight matrix are parameters of the model to be learned)
-            x_attention : size of (batch_size, 1, w, h)
+            x_attention : size (batch_size, 1, sentence_length, height)
         3. stack the representation feature map and attention feature map
-            x : size of (batch_size, 2, w, h)
+            x : size (batch_size, 2, sentence_length, height)
         4. batch norm(not in paper)
 
         Parameters
         ----------
         x1, x2 : 4-D torch Tensor
-            size (batch_size, 1, w, h)
+            size (batch_size, 1, sentence_length, height)
 
         Returns
         -------
         (x1, x2) : list of 4-D torch Tensor
-            size (batch_size, 2, w, h)
+            size (batch_size, 2, sentence_length, height)
         '''
         attention_m = attention_matrix(x1, x2)
 
@@ -92,25 +292,25 @@ class Abcnn2Portion(nn.Module):
 
     def __init__(self, sentence_length, filter_width):
         super(Abcnn2Portion, self).__init__()
-        self.wp = WpLayer(sentence_length, filter_width)
+        self.wp = WpLayer(sentence_length, filter_width, True)
 
     def forward(self, x1, x2):
         '''
         1. compute attention matrix
-            attention_m : size of (batch_size, w+filter_width-1, w+filter_width-1)
+            attention_m : size (batch_size, sentence_length + filter_width - 1, sentence_length + filter_width - 1)
         2. sum all attention values for a unit to derive a single attention weight for that unit
-            x_a_conv : size of (batch_size, w+filter_width-1)
+            x_a_conv : size (batch_size, sentence_length + filter_width - 1)
         3. average pooling(w-ap)
 
         Parameters
         ----------
         x1, x2 : 4-D torch Tensor
-            size (batch_size, 1, w+filter_width-1, h)
+            size (batch_size, 1, sentence_length + filter_width - 1, height)
 
         Returns
         -------
         (x1, x2) : list of 4-D torch Tensor
-            size (batch_size, 1, w, h)
+            size (batch_size, 1, sentence_length, height)
         '''
         attention_m = attention_matrix(x1, x2)
         x1_a_conv = attention_m.sum(dim=1)
@@ -122,12 +322,19 @@ class Abcnn2Portion(nn.Module):
 
 
 class InceptionModule(nn.Module):
-    
-    def __init__(self, sentence_length, filter_width, filter_height, filter_channel):
+    '''
+    inception module(not in paper)
+    first layer width is filter_width(given)
+    second layer width is filter_width + 4
+    third layer width is sentence_length
+
+    this helps model to be learned(when the number of layers > 8)
+    '''
+    def __init__(self, in_channel, sentence_length, filter_width, filter_height, filter_channel):
         super(InceptionModule,self).__init__()
-        self.conv_1 = convolution(filter_width, filter_height, int(filter_channel/3) + filter_channel - 3*int(filter_channel/3), filter_width-1)
-        self.conv_2 = convolution(filter_width+4, filter_height, int(filter_channel/3), filter_width+1)
-        self.conv_3 = convolution(sentence_length, filter_height, int(filter_channel/3), int((sentence_length+filter_width-2)/2))
+        self.conv_1 = convolution(in_channel, filter_width, filter_height, int(filter_channel/3) + filter_channel - 3*int(filter_channel/3), filter_width-1)
+        self.conv_2 = convolution(in_channel, filter_width+4, filter_height, int(filter_channel/3), filter_width+1)
+        self.conv_3 = convolution(in_channel, sentence_length, filter_height, int(filter_channel/3), int((sentence_length+filter_width-2)/2))
 
     def forward(self, x):
         out_1 = self.conv_1(x)
@@ -137,15 +344,38 @@ class InceptionModule(nn.Module):
         return output
 
 class ConvLayer(nn.Module):
+    '''
+    convolution layer for abcnn
 
-    def __init__(self, sentence_length, filter_width, filter_height, filter_channel, inception):
+    Attributes
+    ----------
+    inception : bool
+        whether use inception module
+    '''
+    def __init__(self, isAbcnn2, sentence_length, filter_width, filter_height, filter_channel, inception):
         super(ConvLayer, self).__init__()
         if inception:
-            self.model = InceptionModule(sentence_length, filter_width, filter_height, filter_channel)
+            self.model = InceptionModule(1 if isAbcnn2 else 2, sentence_length, filter_width, filter_height, filter_channel)
         else:
-            self.model = convolution(filter_width, filter_height, filter_channel, filter_width-1)
+            self.model = convolution(1 if isAbcnn2 else 2, filter_width, filter_height, filter_channel, filter_width-1)
 
     def forward(self, x):
+        '''
+        1. convlayer
+            size (batch_size, filter_channel, width, 1)
+        2. transpose
+            size (batch_size, 1, width, filter_channel)
+
+        Parameters
+        ----------
+        x : 4-D torch Tensor
+            size (batch_size, 1, width, height)
+        
+        Returns
+        -------
+        output : 4-D torch Tensor
+            size (batch_size, 1, width, filter_channel)
+        '''
         output = self.model(x)
         output = output.permute(0, 3, 2, 1)
         return output
@@ -166,7 +396,7 @@ def cosine_similarity(x1, x2):
     return F.cosine_similarity(x1, x2).unsqueeze(1)
 
 def manhattan_distance(x1, x2):
-    '''compute manhattan distance between x1 and x2
+    '''compute manhattan distance between x1 and x2 (not in paper)
 
     Parameters
     ----------
@@ -180,70 +410,111 @@ def manhattan_distance(x1, x2):
     '''
     return torch.div(torch.norm((x1 - x2), 1, 1, keepdim=True), x1.size()[1])
 
-def convolution(filter_width, filter_height, filter_channel, padding):
-    ''' make convolution layer
+def convolution(in_channel, filter_width, filter_height, filter_channel, padding):
+    '''convolution layer
     '''
     model = nn.Sequential(
-        nn.Conv2d(2, filter_channel, (filter_width, filter_height), stride=1, padding=(padding, 0)),
+        nn.Conv2d(in_channel, filter_channel, (filter_width, filter_height), stride=1, padding=(padding, 0)),
         nn.BatchNorm2d(filter_channel),
         nn.Tanh()
     )
     return model
     
 def attention_matrix(x1, x2, eps=1e-6):
-    '''make attention matrix using match score
+    '''compute attention matrix using match score
     
-    1/(1 + |x · y|)
+    1 / (1 + |x · y|)
     |·| is euclidean distance
 
     Parameters
     ----------
     x1, x2 : 4-D torch Tensor
-        size (batch_size, 1, w, h)
+        size (batch_size, 1, sentence_length, h)
     
     Returns
     -------
     output : 3-D torch Tensor
-        match score result of size (batch_size, w(x2), w(x1))
+        match score result of size (batch_size, sentence_length(for x2), sentence_length(for x1))
     '''
-    
     eps = torch.tensor(eps)
     one = torch.tensor(1.)
     euclidean = (torch.pow(x1 - x2.permute(0, 2, 1, 3), 2).sum(dim=3) + eps).sqrt()
     return (euclidean + one).reciprocal()
 
 class ApLayer(nn.Module):
+    '''column-wise averaging over all columns
     '''
-    Average pooling layer to calculate similarity
-    after pooling x = (bs, 1, 1, height)
-    output = (bs, height)
-    '''
+
     def __init__(self, pool_width, height):
         super(ApLayer, self).__init__()
         self.ap = nn.AvgPool2d((pool_width, 1), stride=1)
         self.height = height
 
     def forward(self, x):
+        '''
+        1. average pooling
+            x size (batch_size, 1, 1, height)
+        2. representation vector for the sentence
+            output size (batch_size, height)
+
+        Parameters
+        ----------
+        x : 4-D torch Tensor
+            convolution output of size (batch_size, 1, sentence_length, height)
+        
+        Returns
+        -------
+        output : 2-D torch Tensor
+            representation vector of size (batch_size, height)
+        '''
         return self.ap(x).view([-1, self.height])
 
 class WpLayer(nn.Module):
+    '''column-wise averaging over windows of w consecutive columns
+
+    Attributes
+    ----------
+    attention : bool
+        compute layer with attention matrix
     '''
-    x = (bs, 1, w + filter_width - 1, height)
-    attention_matrix = (bs, w + filter_width - 1)
-    output = (bs, 1, sentence_length, height)
-    '''
-    def __init__(self, sentence_length, filter_width):
+    def __init__(self, sentence_length, filter_width, attention):
         super(WpLayer, self).__init__()
-        self.sentence_length = sentence_length
-        self.filter_width = filter_width
+        self.attention = attention
+        if attention:
+            self.sentence_length = sentence_length
+            self.filter_width = filter_width
+        else:
+            self.wp = nn.AvgPool2d((filter_width, 1), stride=1)
 
-    def forward(self, x, attention_matrix):
-        pools = []
-        attention_matrix = attention_matrix.unsqueeze(1).unsqueeze(3)
-        for i in range(self.sentence_length):
-            pools.append((x[:, :, i:i+self.filter_width, :] * attention_matrix[:, :, i:i+self.filter_width, :]).sum(dim=2, keepdim=True))
+    def forward(self, x, attention_matrix=None):
+        '''
+        if attention
+            reweight the convolution output with attention matrix
+        else
+            average pooling
 
-        return torch.cat(pools, dim=2)
+        Parameters
+        ----------
+        x : 4-D torch Tensor
+            convolution output of size (batch_size, 1, sentence_length + filter_width - 1, height)
+        attention_matrix: 2-D torch Tensor
+            attention matrix between (convolution output x1 and convolution output x2) of size (batch_size, sentence_length + filter_width - 1)
+        
+        Returns
+        -------
+        output : 4-D torch Tensor
+            size (batch_size, 1, sentence_length, height)
+        '''
+        if self.attention:
+            pools = []
+            attention_matrix = attention_matrix.unsqueeze(1).unsqueeze(3)
+            for i in range(self.sentence_length):
+                pools.append((x[:, :, i:i+self.filter_width, :] * attention_matrix[:, :, i:i+self.filter_width, :]).sum(dim=2, keepdim=True))
+
+            return torch.cat(pools, dim=2)
+        
+        else:
+            return self.wp(x)        
     
 def weights_init(m):
     classname = m.__class__.__name__

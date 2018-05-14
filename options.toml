@@ -23,7 +23,8 @@ inception = true
 distance = 'cosine'
 
 [training]
-epochs = 15
+model = '2'
+epochs = 30
 startepoch = 0
 dataset = 'sample_data/'
 learningrate = 0.01

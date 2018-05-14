@@ -4,13 +4,21 @@ from torch import nn, optim
 from dataset import KinQueryDataset, preprocess
 from torch.utils.data import DataLoader
 
-from abcnn import Abcnn3, weights_init
+from abcnn import Abcnn1, Abcnn3, Abcnn2, weights_init
 
 def train(options):
     device = torch.device("cuda" if options['general']['usecudnn'] else "cpu")
+    
+    print('initialize model ABCNN' + options['training']['model'])
+    if options['training']['model'] == '3':
+        model = Abcnn3
+    elif options['training']['model'] == '2':
+        model = Abcnn2
+    else:
+        model = Abcnn1
 
     #batch_size, emb_dim, sentence_length, filter_w, filter_c=100, layer_size=2
-    model = Abcnn3(options['model']['embeddeddimension'],
+    model = model(options['model']['embeddeddimension'],
                 options['model']['strlenmax'],
                 options['model']['filterwidth'],
                 options['model']['filterchannel'],
