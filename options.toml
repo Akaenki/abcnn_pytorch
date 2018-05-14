@@ -21,9 +21,9 @@ filterchannel = 130
 layersize = 2
 inception = true
 distance = 'cosine'
+number = '2'
 
 [training]
-model = '2'
 epochs = 30
 startepoch = 0
 dataset = 'sample_data/'

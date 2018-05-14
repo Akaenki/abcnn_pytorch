@@ -9,10 +9,10 @@ from abcnn import Abcnn1, Abcnn3, Abcnn2, weights_init
 def train(options):
     device = torch.device("cuda" if options['general']['usecudnn'] else "cpu")
     
-    print('initialize model ABCNN' + options['training']['model'])
-    if options['training']['model'] == '3':
+    print('initialize model ABCNN' + options['model']['number'])
+    if optionsoptions['model']['number'] == '3':
         model = Abcnn3
-    elif options['training']['model'] == '2':
+    elif optionsoptions['model']['number'] == '2':
         model = Abcnn2
     else:
         model = Abcnn1
