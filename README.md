@@ -1,5 +1,5 @@
-# abcnn_pytorch
-Attention-Based Convolutional Neural Network for Modeling Sentence Pairs
+# ABCNN_pytorch
+[Attention-Based Convolutional Neural Network for Modeling Sentence Pairs](https://arxiv.org/abs/1512.05193)
 
 ## Usage
  - Install [Python 3].
@@ -16,7 +16,13 @@ Attention-Based Convolutional Neural Network for Modeling Sentence Pairs
 ├── main.py
 ├── options.toml # options
 ├── requirements.txt
-├── train.py # training function
+└── train.py # training function
+```
+
+##### Options
+```bash
+[general]
+
 ```
 
 ## Dependencies
