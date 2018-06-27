@@ -20,7 +20,7 @@
 └── train.py # training function
 ```
 
-##### Options
+## Options
 ```bash
 [model]
 embeddeddimension = 200 # embedding vector size
