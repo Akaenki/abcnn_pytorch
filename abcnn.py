@@ -3,6 +3,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
+
 class Abcnn3(nn.Module):
     '''
     ABCNN3
@@ -34,15 +35,14 @@ class Abcnn3(nn.Module):
         self.abcnn1 = nn.ModuleList()
         self.abcnn2 = nn.ModuleList()
         self.conv = nn.ModuleList()
-        self.ap = nn.ModuleList([ApLayer(sentence_length, emb_dim)])
+        self.ap = nn.ModuleList([ApLayer(emb_dim)])
         self.fc = nn.Linear(layer_size+1, 1)
-
 
         for i in range(layer_size):
             self.abcnn1.append(Abcnn1Portion(sentence_length, emb_dim if i == 0 else filter_channel))
             self.abcnn2.append(Abcnn2Portion(sentence_length, filter_width))
             self.conv.append(ConvLayer(False, sentence_length, filter_width, emb_dim if i == 0 else filter_channel, filter_channel, inception))
-            self.ap.append(ApLayer(sentence_length + filter_width - 1, filter_channel))
+            self.ap.append(ApLayer(filter_channel))
         
     def forward(self, x1, x2):
         '''
@@ -63,7 +63,7 @@ class Abcnn3(nn.Module):
         Parameters
         ----------
         x1, x2 : 4-D torch Tensor
-            size (batch_size, 1, width, emb_dim)
+            size (batch_size, 1, sentence_length, emb_dim)
 
         Returns
         -------
@@ -83,6 +83,7 @@ class Abcnn3(nn.Module):
         sim_fc = torch.cat(sim, dim=1)
         output = self.fc(sim_fc)
         return output
+
 
 class Abcnn1(nn.Module):
     '''
@@ -115,14 +116,14 @@ class Abcnn1(nn.Module):
 
         self.abcnn = nn.ModuleList()
         self.conv = nn.ModuleList()
-        self.ap = nn.ModuleList([ApLayer(sentence_length, emb_dim)])
+        self.ap = nn.ModuleList([ApLayer(emb_dim)])
         self.wp = nn.ModuleList()
         self.fc = nn.Linear(layer_size+1, 1)
 
         for i in range(layer_size):
             self.abcnn.append(Abcnn1Portion(sentence_length, emb_dim if i == 0 else filter_channel))
             self.conv.append(ConvLayer(False, sentence_length, filter_width, emb_dim if i == 0 else filter_channel, filter_channel, inception))
-            self.ap.append(ApLayer(sentence_length + filter_width - 1, filter_channel))
+            self.ap.append(ApLayer(filter_channel))
             self.wp.append(WpLayer(sentence_length, filter_width, False))
 
     def forward(self, x1, x2):
@@ -144,7 +145,7 @@ class Abcnn1(nn.Module):
         Parameters
         ----------
         x1, x2 : 4-D torch Tensor
-            size (batch_size, 1, width, emb_dim)
+            size (batch_size, 1, sentence_length, emb_dim)
 
         Returns
         -------
@@ -165,6 +166,7 @@ class Abcnn1(nn.Module):
         sim_fc = torch.cat(sim, dim=1)
         output = self.fc(sim_fc)
         return output
+
 
 class Abcnn2(nn.Module):
     '''
@@ -221,7 +223,7 @@ class Abcnn2(nn.Module):
         Parameters
         ----------
         x1, x2 : 4-D torch Tensor
-            size (batch_size, 1, width, emb_dim)
+            size (batch_size, 1, sentence_length, emb_dim)
 
         Returns
         -------
@@ -241,6 +243,7 @@ class Abcnn2(nn.Module):
         output = self.fc(sim_fc)
         return output
 
+
 class Abcnn1Portion(nn.Module):
     '''Part of Abcnn1
     '''
@@ -255,20 +258,20 @@ class Abcnn1Portion(nn.Module):
         1. compute attention matrix
             attention_m : size (batch_size, sentence_length, sentence_length)
         2. generate attention feature map(weight matrix are parameters of the model to be learned)
-            x_attention : size (batch_size, 1, sentence_length, height)
+            x_attention : size (batch_size, 1, sentence_length, emb_dim)
         3. stack the representation feature map and attention feature map
-            x : size (batch_size, 2, sentence_length, height)
+            x : size (batch_size, 2, sentence_length, emb_dim)
         4. batch norm(not in paper)
 
         Parameters
         ----------
         x1, x2 : 4-D torch Tensor
-            size (batch_size, 1, sentence_length, height)
+            size (batch_size, 1, sentence_length, emb_dim)
 
         Returns
         -------
         (x1, x2) : list of 4-D torch Tensor
-            size (batch_size, 2, sentence_length, height)
+            size (batch_size, 2, sentence_length, emb_dim)
         '''
         attention_m = attention_matrix(x1, x2)
 
@@ -285,10 +288,10 @@ class Abcnn1Portion(nn.Module):
         
         return (x1, x2)
 
+
 class Abcnn2Portion(nn.Module):
     '''Part of Abcnn2
     '''
-
     def __init__(self, sentence_length, filter_width):
         super(Abcnn2Portion, self).__init__()
         self.wp = WpLayer(sentence_length, filter_width, True)
@@ -342,6 +345,7 @@ class InceptionModule(nn.Module):
         output = torch.cat([out_1, out_2, out_3], dim=1)
         return output
 
+
 class ConvLayer(nn.Module):
     '''
     convolution layer for abcnn
@@ -361,23 +365,24 @@ class ConvLayer(nn.Module):
     def forward(self, x):
         '''
         1. convlayer
-            size (batch_size, filter_channel, width, 1)
+            size (batch_size, filter_channel, height, 1)
         2. transpose
-            size (batch_size, 1, width, filter_channel)
+            size (batch_size, 1, height, filter_channel)
 
         Parameters
         ----------
         x : 4-D torch Tensor
-            size (batch_size, 1, width, height)
+            size (batch_size, 1, height, width)
         
         Returns
         -------
         output : 4-D torch Tensor
-            size (batch_size, 1, width, filter_channel)
+            size (batch_size, 1, height, filter_channel)
         '''
         output = self.model(x)
         output = output.permute(0, 3, 2, 1)
         return output
+
 
 def cosine_similarity(x1, x2):
     '''compute cosine similarity between x1 and x2
@@ -394,6 +399,7 @@ def cosine_similarity(x1, x2):
     '''
     return F.cosine_similarity(x1, x2).unsqueeze(1)
 
+
 def manhattan_distance(x1, x2):
     '''compute manhattan distance between x1 and x2 (not in paper)
 
@@ -409,6 +415,7 @@ def manhattan_distance(x1, x2):
     '''
     return torch.div(torch.norm((x1 - x2), 1, 1, keepdim=True), x1.size()[1])
 
+
 def convolution(in_channel, filter_width, filter_height, filter_channel, padding):
     '''convolution layer
     '''
@@ -418,7 +425,8 @@ def convolution(in_channel, filter_width, filter_height, filter_channel, padding
         nn.Tanh()
     )
     return model
-    
+
+
 def attention_matrix(x1, x2, eps=1e-6):
     '''compute attention matrix using match score
     
@@ -428,7 +436,7 @@ def attention_matrix(x1, x2, eps=1e-6):
     Parameters
     ----------
     x1, x2 : 4-D torch Tensor
-        size (batch_size, 1, sentence_length, h)
+        size (batch_size, 1, sentence_length, width)
     
     Returns
     -------
@@ -440,21 +448,21 @@ def attention_matrix(x1, x2, eps=1e-6):
     euclidean = (torch.pow(x1 - x2.permute(0, 2, 1, 3), 2).sum(dim=3) + eps).sqrt()
     return (euclidean + one).reciprocal()
 
+
 class ApLayer(nn.Module):
     '''column-wise averaging over all columns
     '''
 
-    def __init__(self, pool_width, height):
+    def __init__(self, width):
         super(ApLayer, self).__init__()
-        self.ap = nn.AvgPool2d((pool_width, 1), stride=1)
-        self.height = height
+        self.ap = nn.AvgPool2d((1, width), stride=1)
 
     def forward(self, x):
         '''
         1. average pooling
-            x size (batch_size, 1, 1, height)
+            x size (batch_size, 1, sentence_length, 1)
         2. representation vector for the sentence
-            output size (batch_size, height)
+            output size (batch_size, sentence_length)
 
         Parameters
         ----------
@@ -466,7 +474,8 @@ class ApLayer(nn.Module):
         output : 2-D torch Tensor
             representation vector of size (batch_size, height)
         '''
-        return self.ap(x).view([-1, self.height])
+        return self.ap(x).squeeze(1).squeeze(2)
+
 
 class WpLayer(nn.Module):
     '''column-wise averaging over windows of w consecutive columns
@@ -514,7 +523,8 @@ class WpLayer(nn.Module):
         
         else:
             return self.wp(x)        
-    
+
+
 def weights_init(m):
     classname = m.__class__.__name__
     if classname.find('Conv') != -1 and classname.find('Layer') == -1:
