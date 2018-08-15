@@ -467,12 +467,12 @@ class ApLayer(nn.Module):
         Parameters
         ----------
         x : 4-D torch Tensor
-            convolution output of size (batch_size, 1, sentence_length, height)
+            convolution output of size (batch_size, 1, sentence_length, width)
         
         Returns
         -------
         output : 2-D torch Tensor
-            representation vector of size (batch_size, height)
+            representation vector of size (batch_size, width)
         '''
         return self.ap(x).squeeze(1).squeeze(2)
 
